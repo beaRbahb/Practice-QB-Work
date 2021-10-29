@@ -3,12 +3,11 @@ library(tidyverse)
 library(nflfastR)
 library(ggimage)
 library(gt)
-install.packages("ggdist")
 library(ggdist)
-install.packages("rcartocolor")
 library(rcartocolor)
-
-my_pal <- rcartocolor::carto_pal(n = 8, name = "Bold")[c(1, 3, 7, 2)]
+library(nflplotR)
+library(ggplot2)
+library(ggtext)
 
 theme_flip <-
   theme(
@@ -23,20 +22,34 @@ data2021 <- load_pbp(2021)
 
 rookieQB2021 <- c("J.Fields", "Z.Wilson", "T.Lance", "T.Lawrence", "M.Jones")
 
+rookieTeamColor2021 <- rookieQBEPA2021 %>%
+  filter(passer %in% rookieQB2021) %>%
+  group_by(passer) %>%
+  summarize(team_color) %>%
+  distinct()
+
+test <- data2021 %>%
+  filter(pass == 1) %>%
+  group_by(id) %>%
+  summarize(qbName = passer)
+
 qbEPA2021 <- data2021 %>%
   filter(passer %in% rookieQB2021) %>%
   filter(qb_dropback == 1, season_type == "REG", !is.na(epa), !is.na(posteam), posteam != "") %>%
-  group_by(passer, week, posteam) %>%
+  group_by(passer, week, posteam, id) %>%
   summarize(qbEPA = epa, 
             n_dropbacks = sum(pass)) %>%
   ungroup() %>%
   filter(n_dropbacks >= 10)
 
 rookieQBEPA2021 <- qbEPA2021 %>%
-  left_join(teams_colors_logos, by = c("posteam" = "team_abbr")) 
+  left_join(teams_colors_logos, by = c("posteam" = "team_abbr"))
+  
+weeklyRookieEPA2021 <- rookieQBEPA2021[c("passer", "qbEPA", "team_color")]
 
-ggplot(rookieQBEPA2021, aes(x = passer, y = qbEPA)) + 
+ggplot2::ggplot(rookieQBEPA2021, aes(x = id, y = qbEPA)) + 
   ggdist::stat_halfeye(
+    aes(fill = team_color),
     adjust = .5, 
     width = .6, 
     .width = 0, 
@@ -56,7 +69,20 @@ ggplot(rookieQBEPA2021, aes(x = passer, y = qbEPA)) +
       seed = 1, width = .1
     )
   ) + 
+  nflplotR::scale_x_nfl_headshots() + 
+  ggplot2::scale_color_identity() +
+  ggplot2::scale_fill_identity() +
   coord_flip() + 
   facet_grid() + 
-  geom_hline(yintercept = mean(qbEPA2021$qbEPA), linetype = "dashed") +
-  theme_flip
+  geom_hline(yintercept = mean(qbEPA2021$qbEPA), linetype = "dashed", alpha = 0.5) +
+  ggplot2::theme(
+    axis.title.x = ggplot2::element_blank(), 
+    axis.title.y = ggplot2::element_blank()
+  )
+  ggplot2::labs(
+    title = "Rookie QB EPA Distributions through Week 7",
+    y = "EPA/Play"
+  )+
+  nflplotR::theme_x_nfl()+
+  theme_flip()
+ 
