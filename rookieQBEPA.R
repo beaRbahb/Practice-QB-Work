@@ -9,30 +9,13 @@ library(nflplotR)
 library(ggplot2)
 library(ggtext)
 
-theme_flip <-
-  theme(
-    panel.grid.major.x = element_line(color = "grey90", size = .6),
-    panel.grid.major.y = element_blank(),
-    legend.position = "top", 
-    legend.text = element_text(family = "Roboto Mono", size = 18),
-    legend.title = element_text(face = "bold", size = 18, margin = margin(b = 25))
-  )
-
+#load 2021 data
 data2021 <- load_pbp(2021)
 
-rookieQB2021 <- c("J.Fields", "Z.Wilson", "T.Lance", "T.Lawrence", "M.Jones")
+#Set rookie group
+rookieQB2021 <- c("J.Fields", "Z.Wilson", "T.Lance", "T.Lawrence", "M.Jones", "D.Mills")
 
-rookieTeamColor2021 <- rookieQBEPA2021 %>%
-  filter(passer %in% rookieQB2021) %>%
-  group_by(passer) %>%
-  summarize(team_color) %>%
-  distinct()
-
-test <- data2021 %>%
-  filter(pass == 1) %>%
-  group_by(id) %>%
-  summarize(qbName = passer)
-
+#Filter out the data for our rookie group on dropbacks and pull data for the graph
 qbEPA2021 <- data2021 %>%
   filter(passer %in% rookieQB2021) %>%
   filter(qb_dropback == 1, season_type == "REG", !is.na(epa), !is.na(posteam), posteam != "") %>%
@@ -42,22 +25,23 @@ qbEPA2021 <- data2021 %>%
   ungroup() %>%
   filter(n_dropbacks >= 10)
 
+#add in the colors for the teams for the graph
 rookieQBEPA2021 <- qbEPA2021 %>%
   left_join(teams_colors_logos, by = c("posteam" = "team_abbr"))
   
-weeklyRookieEPA2021 <- rookieQBEPA2021[c("passer", "qbEPA", "team_color")]
-
-ggplot2::ggplot(rookieQBEPA2021, aes(x = id, y = qbEPA)) + 
+#Big time raincloud plot via https://www.cedricscherer.com/2019/08/05/a-ggplot2-tutorial-for-beautiful-plotting-in-r/ 
+ggplot(rookieQBEPA2021, aes(x = passer, y = qbEPA)) + 
   ggdist::stat_halfeye(
     aes(fill = team_color),
     adjust = .5, 
     width = .6, 
     .width = 0, 
     justification = -.3, 
-    point_colour = NA 
+    point_colour = NA, 
+    alpha = 0.7
     ) + 
   geom_boxplot(
-    width = .15, 
+    width = .2, 
     outlier.shape = NA
   ) +
   geom_point(
@@ -69,20 +53,16 @@ ggplot2::ggplot(rookieQBEPA2021, aes(x = id, y = qbEPA)) +
       seed = 1, width = .1
     )
   ) + 
-  nflplotR::scale_x_nfl_headshots() + 
-  ggplot2::scale_color_identity() +
-  ggplot2::scale_fill_identity() +
+  scale_color_identity() +
+  scale_fill_identity() +
+  facet_grid() +
   coord_flip() + 
-  facet_grid() + 
   geom_hline(yintercept = mean(qbEPA2021$qbEPA), linetype = "dashed", alpha = 0.5) +
-  ggplot2::theme(
-    axis.title.x = ggplot2::element_blank(), 
-    axis.title.y = ggplot2::element_blank()
-  )
-  ggplot2::labs(
-    title = "Rookie QB EPA Distributions through Week 7",
-    y = "EPA/Play"
-  )+
-  nflplotR::theme_x_nfl()+
-  theme_flip()
- 
+  theme_minimal() + 
+  labs(
+    title = glue::glue("Rookie QB EPA Distributions through Week 7"),
+    axis.text.x = element_blank(), 
+    y = "EPA/Play") + 
+  theme(axis.title.y = element_blank())
+  
+ggsave('RookieEPAThroughWeek7.png', width = 15, height = 10, dpi = "retina")
